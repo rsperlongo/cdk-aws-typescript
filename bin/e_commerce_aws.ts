@@ -30,6 +30,7 @@ const productsAppStack = new ProductsAppStack(app, 'ProductsApp', {
     tags: tags,
     env: env
 })
+productsAppStack.addDependency(productsAppLayerStack)
 
 const eCommerceApiStack = new ECommerceApiStack(app, 'ECommerceApi', {
     productsFetchHandler: productsAppStack.productsFetchHandler,
