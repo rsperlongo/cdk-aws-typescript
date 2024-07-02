@@ -6,16 +6,17 @@ import {
 import { Product, ProductRepository } from "/opt/nodejs/productsLayer";
 import { DynamoDB, Lambda } from "aws-sdk";
 import { ProductEvent, ProductEventType } from "/opt/nodejs/productEventsLayer";
-import * as AWSXRay from 'aws-xray-sdk'
+import * as AWSXRay from "aws-xray-sdk";
 
-AWSXRay.captureAWS(require('aws-sdk'))
+AWSXRay.captureAWS(require("aws-sdk"));
 
 const productsDdb = process.env.PRODUCTS_DDB!;
-const productEventsFunctionName = process.env.PRODUCTS_EVENTS_FUNCTION_NAME!;
-const ddbClient = new DynamoDB.DocumentClient();
-const lambdaClient = new Lambda()
+const productEventsFunctionName = process.env.PRODUCT_EVENTS_FUNCTION_NAME!;
 
-const productsRepository = new ProductRepository(ddbClient, productsDdb);
+const ddbClient = new DynamoDB.DocumentClient();
+const lambdaClient = new Lambda();
+
+const productRepository = new ProductRepository(ddbClient, productsDdb);
 
 export async function handler(
   event: APIGatewayProxyEvent,
@@ -23,18 +24,24 @@ export async function handler(
 ): Promise<APIGatewayProxyResult> {
   const lambdaRequestId = context.awsRequestId;
   const apiRequestId = event.requestContext.requestId;
+
   console.log(
     `API Gateway RequestId: ${apiRequestId} - Lambda RequestId: ${lambdaRequestId}`
   );
 
   if (event.resource === "/products") {
     console.log("POST /products");
-
     const product = JSON.parse(event.body!) as Product;
-    const productCreated = await productsRepository.create(product);
+    const productCreated = await productRepository.create(product);
 
-    const response = await sendProductEvent(productCreated, ProductEventType.CREATED, 'matilde@weblifebrasil.com.br', lambdaRequestId)
-    console.log(response)
+    const response = await sendProductEvent(
+      productCreated,
+      ProductEventType.CREATED,
+      "matilde@siecola.com.br",
+      lambdaRequestId
+    );
+    console.log(response);
+
     return {
       statusCode: 201,
       body: JSON.stringify(productCreated),
@@ -43,47 +50,44 @@ export async function handler(
     const productId = event.pathParameters!.id as string;
     if (event.httpMethod === "PUT") {
       console.log(`PUT /products/${productId}`);
-
-      const product = JSON.parse(event.body!) as Product
+      const product = JSON.parse(event.body!) as Product;
       try {
-        const productUpdated = await productsRepository.updateProduct(productId, product) 
+        const productUpdated = await productRepository.updateProduct(
+          productId,
+          product
+        );
 
-        const response = await sendProductEvent(productUpdated, ProductEventType.UPDATED, 'ricardo@weblifebrasil.com.br', lambdaRequestId)
-        console.log(response)
+        const response = await sendProductEvent(
+          productUpdated,
+          ProductEventType.UPDATED,
+          "ricardo@weblifebrasil.com",
+          lambdaRequestId
+        );
+        console.log(response);
+
         return {
           statusCode: 200,
           body: JSON.stringify(productUpdated),
-        }
-      } catch (ConditionalCheckFailException) {
+        };
+      } catch (ConditionalCheckFailedException) {
         return {
-          statusCode: 400,
-          body: 'Product not found'
-        }
+          statusCode: 404,
+          body: "Product not found",
+        };
       }
-
-      function sendProductEvent(product: Product, eventType: ProductEventType, email: string, lambdaRequestId: string ) {
-        const event: ProductEvent = {
-          email: email,
-          eventType: eventType,
-          productCode: product.code,
-          productId: product.id,
-          productPrice: product.price,
-          requestId: lambdaRequestId
-        }
-        lambdaClient.invoke({
-          FunctionName: productEventsFunctionName,
-          Payload: JSON.stringify(event),
-          InvocationType: 'RequestResponse'
-        }).promise()
-      }
-      
     } else if (event.httpMethod === "DELETE") {
       console.log(`DELETE /products/${productId}`);
-
       try {
-        const product = await productsRepository.deleteProduct(productId);
-        const response = await sendProductEvent(product, ProductEventType.DELETED, 'hannah@weblifebrasil.com.br', lambdaRequestId)
-        console.log(response)
+        const product = await productRepository.deleteProduct(productId);
+
+        const response = await sendProductEvent(
+          product,
+          ProductEventType.DELETED,
+          "noah@weblifebrasil.com",
+          lambdaRequestId
+        );
+        console.log(response);
+
         return {
           statusCode: 200,
           body: JSON.stringify(product),
@@ -100,10 +104,30 @@ export async function handler(
 
   return {
     statusCode: 400,
-    body: "Bad Request",
+    body: "Bad request",
   };
 }
-function sendProductEvent(productCreated: Product, CREATED: ProductEventType, arg2: string, lambdaRequestId: string) {
-  throw new Error("Function not implemented.");
-}
 
+function sendProductEvent(
+  product: Product,
+  eventType: ProductEventType,
+  email: string,
+  lambdaRequestId: string
+) {
+  const event: ProductEvent = {
+    email: email,
+    eventType: eventType,
+    productCode: product.code,
+    productId: product.id,
+    productPrice: product.price,
+    requestId: lambdaRequestId,
+  };
+
+  return lambdaClient
+    .invoke({
+      FunctionName: productEventsFunctionName,
+      Payload: JSON.stringify(event),
+      InvocationType: "Event",
+    })
+    .promise();
+}
