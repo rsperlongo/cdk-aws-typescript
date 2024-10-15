@@ -1,59 +1,58 @@
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as lambdaNodeJS from 'aws-cdk-lib/aws-lambda-nodejs'
-import * as apigateway from 'aws-cdk-lib/aws-apigateway'
-import * as cwlogs from 'aws-cdk-lib/aws-logs'
+import * as cdk from "aws-cdk-lib"
+import * as lambdaNodeJS from "aws-cdk-lib/aws-lambda-nodejs"
+import * as apigateway from "aws-cdk-lib/aws-apigateway"
+import * as cwlogs from "aws-cdk-lib/aws-logs"
+import { Construct } from "constructs"
 
 interface ECommerceApiStackProps extends cdk.StackProps {
-    productsFetchHandler: lambdaNodeJS.NodejsFunction
-    productsAdminHandler: lambdaNodeJS.NodejsFunction
+   productsFetchHandler: lambdaNodeJS.NodejsFunction
+   productsAdminHandler: lambdaNodeJS.NodejsFunction
 }
 
 export class ECommerceApiStack extends cdk.Stack {
-    constructor(scopo: Construct, id: string, props: ECommerceApiStackProps) {
-        super(scopo, id, props) 
 
-        const logGroup = new cwlogs.LogGroup(this, 'ECommerceApiLogs')
-        const api = new apigateway.RestApi(this, 'ECommerceApi', {
-            restApiName: 'ECommerceApi',
-            cloudWatchRole: true,
-            deployOptions: {
-                accessLogDestination: new apigateway.LogGroupLogDestination(logGroup),
-                accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({
-                    httpMethod: true,
-                    ip: true,
-                    protocol: true,
-                    requestTime: true,
-                    resourcePath: true,
-                    responseLength: true,
-                    status: true,
-                    caller: true,
-                    user: true
-                })
-            }
-        })
+   constructor(scope: Construct, id: string, props: ECommerceApiStackProps) {
+      super(scope, id, props)
 
-        const productsFetchIntegration = new apigateway.LambdaIntegration(props.productsFetchHandler)
+      const logGroup = new cwlogs.LogGroup(this, "ECommerceApiLogs")
+      const api = new apigateway.RestApi(this, "ECommerceApi", {
+         restApiName: "ECommerceApi",
+         cloudWatchRole: true,
+         deployOptions: {
+            accessLogDestination: new apigateway.LogGroupLogDestination(logGroup),
+            accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields({
+               httpMethod: true,
+               ip: true,
+               protocol: true,
+               requestTime: true,
+               resourcePath: true,
+               responseLength: true,
+               status: true,
+               caller: true,
+               user: true
+            })
+         }
+      })
 
-        // GET
-        const productsResource = api.root.addResource('products')
-        productsResource.addMethod('GET', productsFetchIntegration)
+      const productsFetchIntegration = new apigateway.LambdaIntegration(props.productsFetchHandler)
 
-        // GET /{id}
-        const productsIdResource = productsResource.addResource('{id}')
-        productsIdResource.addMethod('GET', productsFetchIntegration )
+      // "/products"
+      const productsResource = api.root.addResource("products")
+      productsResource.addMethod("GET", productsFetchIntegration)
 
-        const productsAdminIntegration = new apigateway.LambdaIntegration(props.productsAdminHandler)
+      // GET /products/{id}
+      const productIdResource = productsResource.addResource("{id}")
+      productIdResource.addMethod("GET", productsFetchIntegration)
 
-        // POST
-        productsResource.addMethod('POST', productsAdminIntegration)
+      const productsAdminIntegration = new apigateway.LambdaIntegration(props.productsAdminHandler)
 
-        // PUT
-        productsIdResource.addMethod('PUT', productsAdminIntegration)
+      // POST /products
+      productsResource.addMethod("POST", productsAdminIntegration)
 
-        //DELETE
-        productsIdResource.addMethod('DELETE', productsAdminIntegration)
+      // PUT /products/{id}
+      productIdResource.addMethod("PUT", productsAdminIntegration)
 
-    }
-
+      // DELETE /products/{id}
+      productIdResource.addMethod("DELETE", productsAdminIntegration)
+   }
 }
